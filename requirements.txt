@@ -1,3 +1,5 @@
 gradio
-torch transformers
-yt-dlp num2words
+torch 
+transformers
+num2words
+av

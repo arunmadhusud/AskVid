@@ -4,7 +4,6 @@ from transformers import AutoProcessor, AutoModelForImageTextToText, DynamicCach
 import logging
 import tempfile
 import os
-import yt_dlp
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
@@ -27,7 +26,6 @@ class ConversationState:
         self.history = []
         self.video_path = None
         self.video_type = None
-        self.youtube_url = None
         self.temp_dir = None
         self.cache = DynamicCache()
 
@@ -39,42 +37,16 @@ class ConversationState:
                 os.rmdir(self.temp_dir)
             except Exception as e:
                 logger.error(f"Error cleaning up: {e}")
-        self.history, self.video_path, self.video_type, self.youtube_url, self.temp_dir = [], None, None, None, None
+        self.history, self.video_path, self.video_type, self.temp_dir = [], None, None, None
         self.cache = DynamicCache()
 
-    def set_video(self, path, video_type, youtube_url=None, temp_dir=None):
+    def set_video(self, path, video_type, temp_dir=None):
         self.reset()
         self.video_path = path
         self.video_type = video_type
-        self.youtube_url = youtube_url
         self.temp_dir = temp_dir
 
 conversation = ConversationState()
-
-# --- YouTube Video Downloader ---
-def download_youtube_video(url):
-    temp_dir = tempfile.mkdtemp()
-    filepath = os.path.join(temp_dir, "video.mp4")
-    ydl_opts = {
-        'format': 'best[height<=720]',
-        'outtmpl': filepath,
-        'quiet': False
-    }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-        if not os.path.exists(filepath):
-            files = [f for f in os.listdir(temp_dir) if f.endswith(('.mp4', '.webm', '.mkv'))]
-            if files:
-                filepath = os.path.join(temp_dir, files[0])
-            else:
-                raise FileNotFoundError("No video file found after download.")
-        return filepath, temp_dir
-    except Exception as e:
-        logger.error(f"Download error: {e}")
-        if os.path.exists(temp_dir):
-            os.rmdir(temp_dir)
-        raise e
 
 # --- Chat Processor ---
 def process_video_chat(video_path, messages, use_cache=True):
@@ -112,18 +84,11 @@ def process_video_chat(video_path, messages, use_cache=True):
 
 
 # --- Video Setup Handler ---
-def setup_video(input_type, video_file, youtube_url):
-    if input_type == "Upload a Video File" and video_file:
+def setup_video(video_file):
+    if video_file:
         conversation.set_video(video_file.name, "file")
         return "Video uploaded successfully!"
-    elif input_type == "Paste a YouTube Link" and youtube_url.strip():
-        try:
-            filepath, temp_dir = download_youtube_video(youtube_url)
-            conversation.set_video(filepath, "youtube", youtube_url, temp_dir)
-            return "YouTube video loaded successfully!"
-        except Exception as e:
-            return f"Error: {e}"
-    return "Please provide a valid video file or YouTube URL."
+    return "Please provide a valid video file."
 
 # --- Chat Handler ---
 def chat(message, history):
@@ -148,11 +113,8 @@ with gr.Blocks() as demo:
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown("### Video Setup")
-            input_type = gr.Radio(["Upload a Video File", "Paste a YouTube Link"], value="Upload a Video File")
-            with gr.Row():
-                video_file = gr.File(file_types=[".mp4", ".webm", ".mkv", ".avi"])
-                youtube_url = gr.Textbox(visible=False)
-            setup_btn = gr.Button("Set Video")
+            video_file = gr.File(file_types=[".mp4", ".webm", ".mkv", ".avi"], label="Upload Video File")
+            setup_btn = gr.Button("Load Video")
             setup_status = gr.Textbox(interactive=False)
             reset_btn = gr.Button("Reset Chat & Video")
 
@@ -163,20 +125,15 @@ with gr.Blocks() as demo:
                 submit_btn = gr.Button("Send", scale=1)
 
     # Logic Wiring
-    input_type.change(
-        lambda t: (gr.update(visible=t == "Upload a Video File"), gr.update(visible=t == "Paste a YouTube Link")),
-        inputs=input_type,
-        outputs=[video_file, youtube_url]
-    )
-    setup_btn.click(setup_video, inputs=[input_type, video_file, youtube_url], outputs=setup_status)
-    reset_btn.click(lambda: (None, None, "", []), outputs=[video_file, youtube_url, setup_status, chatbot])
+    setup_btn.click(setup_video, inputs=[video_file], outputs=setup_status)
+    reset_btn.click(lambda: (None, "", []), outputs=[video_file, setup_status, chatbot])
     msg.submit(chat, [msg, chatbot], [chatbot]).then(lambda: "", None, msg)
     submit_btn.click(chat, [msg, chatbot], [chatbot]).then(lambda: "", None, msg)
 
     gr.Markdown("""
     ### Instructions
-    1. Choose to upload a video or paste a YouTube URL.
-    2. Click 'Set Video' to load it.
+    1. Upload a video file using the file uploader.
+    2. Click 'Load Video' to load it.
     3. Ask questions in the chat.
     4. The model will answer and remember context.
 
@@ -184,5 +141,4 @@ with gr.Blocks() as demo:
     """)
 
 demo.queue()
-demo.launch(debug=True)
-
+demo.launch(share=True)
