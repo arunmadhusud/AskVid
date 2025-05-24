@@ -6,6 +6,9 @@ With the rapid advancement of Vision-Language Models (VLMs), there has been sign
 ## Proposed Solution
 We developed a **locally-running video chat application** that allows users to upload video files and ask natural language questions about the content. The system uses SmolVLM2-2.2B-Instruct for video understanding, runs entirely on local hardware, and provides complete data privacy while eliminating API dependencies.
 
+## Demo
+[Watch the demo here](https://youtu.be/biBoPD8diAE)
+
 ## Architecture & Data Flow
 ![Architecture Diagram](dataflow.png)
 

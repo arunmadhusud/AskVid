@@ -105,38 +105,67 @@ def chat(message, history):
     response = process_video_chat(conversation.video_path, history_msgs)
     history.append((message, response))
     return history
-    
 
 # --- UI Layout ---
 with gr.Blocks() as demo:
     gr.Markdown("## 🎥 Video Chat with SmolVLM2-2.2B-Instruct")
+    
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown("### Video Setup")
             video_file = gr.File(file_types=[".mp4", ".webm", ".mkv", ".avi"], label="Upload Video File")
-            setup_btn = gr.Button("Load Video")
-            setup_status = gr.Textbox(interactive=False)
+            setup_btn = gr.Button("Load Video", variant="primary")
+            setup_status = gr.Textbox(interactive=False, show_label=False)
             reset_btn = gr.Button("Reset Chat & Video")
-
+            
+        with gr.Column(scale=1):
+            gr.Markdown("### Video Preview")
+            video_player = gr.Video(
+                label="Uploaded Video",
+                show_label=False,
+                height=300,
+                interactive=False
+            )
+            
         with gr.Column(scale=2):
             chatbot = gr.Chatbot(label="Chat History", height=500, bubble_full_width=False)
             with gr.Row():
                 msg = gr.Textbox(placeholder="Ask something about the video...", scale=9)
-                submit_btn = gr.Button("Send", scale=1)
-
+                submit_btn = gr.Button("Send", scale=1, variant="primary")
+    
+    def setup_video_with_player(video_file):
+        if video_file:
+            conversation.set_video(video_file.name, "file")
+            return "✅ Video uploaded successfully!", video_file.name
+        return "⚠️ Please upload a video file.", None
+    
+    # reset function to clear video player
+    def reset_all():
+        conversation.reset()
+        return None, "", [], None
+    
     # Logic Wiring
-    setup_btn.click(setup_video, inputs=[video_file], outputs=setup_status)
-    reset_btn.click(lambda: (None, "", []), outputs=[video_file, setup_status, chatbot])
+    setup_btn.click(
+        setup_video_with_player, 
+        inputs=[video_file], 
+        outputs=[setup_status, video_player]
+    )
+    
+    reset_btn.click(
+        reset_all, 
+        outputs=[video_file, setup_status, chatbot, video_player]
+    )
+    
     msg.submit(chat, [msg, chatbot], [chatbot]).then(lambda: "", None, msg)
     submit_btn.click(chat, [msg, chatbot], [chatbot]).then(lambda: "", None, msg)
-
+    
     gr.Markdown("""
     ### Instructions
-    1. Upload a video file using the file uploader.
-    2. Click 'Load Video' to load it.
-    3. Ask questions in the chat.
-    4. The model will answer and remember context.
-
+    1. Upload a video file using the file uploader
+    2. Click 'Load Video' to load it (you'll see it in the preview)
+    3. Ask questions in the chat about what you see
+    4. The model will analyze the video and remember context
+    
     ### Model: SmolVLM2-2.2B-Instruct
     """)
 
